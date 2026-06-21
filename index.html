@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life Trajectory Galaxy | 人生轨迹银河</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Serif+SC:wght@300;500;700&display=swap');
+
+        :root {
+            --matte-green: #354A3D;
+            /* 哑光绿 - Deep Forest Green */
+            --metallic-gold: #C5A059;
+            /* 金属金 */
+            --galaxy-dark: #05070A;
+            --text-light: #E0E0E0;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--galaxy-dark);
+            color: var(--text-light);
+            font-family: 'Noto Serif SC', serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            /* Let clicks pass to 3D scene */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .title-block h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            color: var(--metallic-gold);
+            text-shadow: 0 0 10px rgba(197, 160, 89, 0.5);
+            letter-spacing: 2px;
+            pointer-events: auto;
+        }
+
+        .title-block p {
+            font-size: 0.9rem;
+            color: #8fa3ad;
+            margin-top: 0.5rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            pointer-events: auto;
+        }
+
+        .btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--metallic-gold);
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-family: 'Noto Serif SC', serif;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: rgba(197, 160, 89, 0.2);
+            box-shadow: 0 0 15px rgba(197, 160, 89, 0.3);
+            border-color: var(--metallic-gold);
+        }
+
+        .status-panel {
+            pointer-events: auto;
+            background: var(--glass-bg);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .interaction-guide {
+            text-align: right;
+            pointer-events: auto;
+        }
+
+        .interaction-guide .key {
+            display: inline-block;
+            color: var(--metallic-gold);
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        /* Modal */
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, rgba(53, 74, 61, 0.9), rgba(5, 7, 10, 0.95));
+            border: 1px solid var(--metallic-gold);
+            padding: 3rem;
+            border-radius: 2px;
+            width: 500px;
+            max-width: 90%;
+            position: relative;
+            box-shadow: 0 0 30px rgba(197, 160, 89, 0.2);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            color: var(--text-light);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .close-modal:hover {
+            color: var(--metallic-gold);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--metallic-gold);
+            font-size: 0.9rem;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="file"],
+        .form-group textarea {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #444;
+            color: white;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--metallic-gold);
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: var(--metallic-gold);
+            color: #000;
+            font-weight: bold;
+            border: none;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-btn:hover {
+            background: #e6c67a;
+            box-shadow: 0 0 15px rgba(197, 160, 89, 0.5);
+        }
+
+        /* Video element for MediaPipe (Hidden) */
+        .input_video {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 320px;
+            height: 240px;
+            z-index: 5;
+            opacity: 0.5;
+            /* Debugging: set to 0.5 to see camera */
+        }
+
+        /* Loader */
+        .loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+            pointer-events: none;
+            text-align: center;
+            transition: opacity 0.5s;
+        }
+
+        .loader.hidden {
+            opacity: 0;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(197, 160, 89, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--metallic-gold);
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Feature Card (Shows when clicking an event) */
+        .event-card {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(20, 25, 30, 0.9);
+            border: 1px solid var(--metallic-gold);
+            padding: 1rem;
+            width: 300px;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 50;
+        }
+
+        .event-card.active {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .event-media {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 0.8rem;
+            background: #111;
+        }
+
+        .event-title {
+            color: var(--metallic-gold);
+            font-size: 1.1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .event-date {
+            color: #888;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .event-desc {
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+    </style>
+    <!-- Import Maps for Three.js ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script>
+        // ... (imports remain)
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+    <div id="canvas-container"></div>
+    <!-- Added autoplay and playsinline to prevent playback errors -->
+    <video class="input_video" autoplay playsinline muted></video>
+
+    <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <p>初始化银河引擎...<br><span id="loader-text" style="font-size: 0.8rem; color: #888;">请允许摄像头权限以开启手势交互</span></p>
+    </div>
+
+    <div class="ui-layer">
+        <div class="header">
+            <div class="title-block">
+                <h1>LIFEALAXY</h1>
+                <p>人生轨迹银河 · 你的专属时空</p>
+            </div>
+            <div class="controls">
+                <button class="btn" id="add-event-btn">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    添加记忆节点
+                </button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="status-panel">
+                <div class="status-item">
+                    <div
+                        style="width: 8px; height: 8px; background: var(--metallic-gold); border-radius: 50%; box-shadow: 0 0 5px var(--metallic-gold);">
+                    </div>
+                    <span id="system-status">系统就绪</span>
+                </div>
+                <div class="status-item">
+                    <span id="hand-status" style="color: #888;">等待手势识别...</span>
+                </div>
+            </div>
+            <div class="interaction-guide">
+                <p><span class="key">张开手掌</span> 流动 · <span class="key">握拳</span> 静止 · <span class="key">捏合</span> 操控
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Event Modal -->
+    <div class="modal" id="add-modal">
+        <div class="modal-content">
+            <span class="close-modal" id="close-modal">&times;</span>
+            <h2 style="color: var(--metallic-gold); margin-bottom: 1.5rem; font-family: 'Cinzel';">铸造星辰</h2>
+            <form id="event-form">
+                <div class="form-group">
+                    <label>事件名称</label>
+                    <input type="text" id="event-title" placeholder="例如：由你命名的瞬间" required>
+                </div>
+                <div class="form-group">
+                    <label>日期</label>
+                    <input type="date" id="event-date" required>
+                </div>
+                <div class="form-group">
+                    <label>影像 (图片/视频 &lt; 30s)</label>
+                    <input type="file" id="event-file" accept="image/*,video/*" required>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="event-desc" rows="3" placeholder="这一刻发生了什么..."></textarea>
+                </div>
+                <button type="submit" class="submit-btn" id="submit-btn">注入银河</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Detail Card -->
+    <div class="event-card" id="event-card">
+        <img class="event-media" id="card-img" style="display:none;">
+        <!-- Removed empty src to prevent browser errors -->
+        <video class="event-media" id="card-video" controls loop style="display:none;"></video>
+        <h3 class="event-title" id="card-title">Event Title</h3>
+        <p class="event-date" id="card-date">2023.01.01</p>
+        <p class="event-desc" id="card-desc">Event description goes here.</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- Configuration & State ---
+        const CONFIG = {
+            particleCount: 2000,
+            galaxyRadius: 50,
+            spiralArms: 3,
+            armSpread: 0.5,
+            particleSize: 0.3,
+            colors: {
+                inside: new THREE.Color('#D4AF37'), // Gold
+                outside: new THREE.Color('#354A3D') // Matte Green
+            }
+        };
+
+        const STATE = {
+            isFlowing: true,
+            speed: 0.2,
+            targetSpeed: 0.2,
+            interactionMode: 'none', // none, rotate, zoom
+            events: [],
+            handPresent: false
+        };
+
+        // --- SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x05070A, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 30, 40);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        // Post-processing (Bloom)
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 1.2; // Intense glow
+        bloomPass.radius = 0.5;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- GALAXY GENERATION ---
+        let geometry = null;
+        let material = null;
+        let points = null;
+
+        function generateGalaxy() {
+            if (points !== null) {
+                geometry.dispose();
+                material.dispose();
+                scene.remove(points);
+            }
+
+            geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(CONFIG.particleCount * 3);
+            const colors = new Float32Array(CONFIG.particleCount * 3);
+            const sizes = new Float32Array(CONFIG.particleCount);
+            const randomness = new Float32Array(CONFIG.particleCount * 3); // For movement
+
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                const i3 = i * 3;
+
+                // Spiral logic
+                const radius = Math.random() * CONFIG.galaxyRadius;
+                const spinAngle = radius * CONFIG.spiralArms;
+                const branchAngle = (i % CONFIG.spiralArms) / CONFIG.spiralArms * Math.PI * 2;
+
+                const randomX = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * CONFIG.armSpread * radius;
+                const randomY = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * CONFIG.armSpread * radius;
+                const randomZ = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * CONFIG.armSpread * radius;
+
+                positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i3 + 1] = randomY * 2; // Flat galaxy, bit of height
+                positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+
+                // Color mixing
+                const mixedColor = CONFIG.colors.inside.clone();
+                mixedColor.lerp(CONFIG.colors.outside, radius / CONFIG.galaxyRadius);
+
+                // Add some "Galaxy" blues/purples randomly
+                if (Math.random() > 0.8) {
+                    mixedColor.offsetHSL(0.5, 0, 0); // Shift to blue/purple
+                }
+
+                colors[i3] = mixedColor.r;
+                colors[i3 + 1] = mixedColor.g;
+                colors[i3 + 2] = mixedColor.b;
+
+                // Size variation
+                sizes[i] = Math.random() * 2.0 + 0.5; // Increased from 0.5 and 0.1 for visibility
+
+                // Store randomness for animation
+                randomness[i3] = randomX;
+                randomness[i3 + 1] = randomY;
+                randomness[i3 + 2] = randomZ;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geometry.setAttribute('aRandomness', new THREE.BufferAttribute(randomness, 3));
+
+            // Custom Shader Material for glowing particles
+            material = new THREE.ShaderMaterial({
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                vertexColors: true,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uSize: { value: 70 * renderer.getPixelRatio() }
+                },
+                vertexShader: `
+                    uniform float uTime;
+                    uniform float uSize;
+                    attribute float size;
+                    attribute vec3 aRandomness;
+                    varying vec3 vColor;
+                    
+                    void main() {
+                        vec3 pos = position;
+                        
+                        // Subtle breathing effect
+                        float slowTime = uTime * 0.5;
+                        pos.x += cos(slowTime + aRandomness.x * 10.0) * 0.1;
+                        pos.z += sin(slowTime + aRandomness.z * 10.0) * 0.1;
+                        pos.y += sin(slowTime + aRandomness.y * 10.0) * 0.1;
+
+                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        gl_PointSize = uSize * size * (1.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                        vColor = color;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    void main() {
+                        // Circular particle
+                        float strength = distance(gl_PointCoord, vec2(0.5));
+                        strength = 1.0 - strength;
+                        strength = pow(strength, 3.0);
+                        
+                        vec3 finalColor = mix(vec3(0.0), vColor, strength);
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    }
+                `
+            });
+
+            points = new THREE.Points(geometry, material);
+            scene.add(points);
+        }
+
+        generateGalaxy();
+
+        // --- LIFE EVENTS (Special Particles) ---
+        const eventGroup = new THREE.Group();
+        scene.add(eventGroup);
+
+        function addLifeEventToGalaxy(data, dominatColor) {
+            // Calculate a position on the outer edge or next "step" of the spiral
+            // For simplicity, we place them randomly on an imaginary timeline (radius)
+            // Ideally, time = radius distance from center.
+
+            const count = STATE.events.length;
+            const radius = 10 + (count * 5); // Growing outwards
+            const angle = count * 0.5; // Spiral out
+
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            const y = (Math.random() - 0.5) * 5;
+
+            // Create a "Star" mesh - Increased Radius to 2.5
+            const starGeo = new THREE.SphereGeometry(2.5, 32, 32);
+            const starMat = new THREE.MeshBasicMaterial({
+                color: dominatColor || 0xFFFFFF,
+                toneMapped: false
+            });
+            // toneMapped false lets it glow very bright with bloom
+            const star = new THREE.Mesh(starGeo, starMat);
+            star.position.set(x, y, z);
+
+            // Add a "Halo" Ring
+            const ringGeo = new THREE.RingGeometry(3.0, 3.2, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: dominatColor || 0xFFFFFF,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.6,
+                toneMapped: false
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.lookAt(0, 0, 0); // Face center roughly
+            star.add(ring);
+
+            // Add Light
+            const light = new THREE.PointLight(dominatColor || 0xFFFFFF, 5, 40);
+            light.position.set(x, y, z);
+            scene.add(light);
+
+            star.userData = { isEvent: true, data: data, ring: ring };
+            eventGroup.add(star);
+
+            // Camera focus animation could go here
+            return star;
+        }
+
+        // Raycasting for interactions
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(eventGroup.children);
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                if (obj.userData.isEvent) {
+                    showEventCard(obj.userData.data);
+                }
+            } else {
+                hideEventCard();
+            }
+        });
+
+        // --- MEDIAPIPE HANDS SETUP ---
+        const videoElement = document.querySelector('.input_video');
+        const loader = document.getElementById('loader');
+        const systemStatus = document.getElementById('system-status');
+        const handStatus = document.getElementById('hand-status');
+
+        let targetRotationSpeed = 0.5;
+
+        function onResults(results) {
+            if (loader && !loader.classList.contains('hidden')) {
+                loader.classList.add('hidden');
+                systemStatus.innerText = "视觉核心已启动";
+                systemStatus.style.color = "#4CAF50";
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                STATE.handPresent = true;
+                handStatus.innerText = "手势操控中";
+                handStatus.style.color = "#C5A059";
+
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Detect simple gestures
+                // 1. Is fist? Check if finger tips are below finger pip (proximal interphalangeal)
+                const isFist = landmarks[8].y > landmarks[6].y &&
+                    landmarks[12].y > landmarks[10].y &&
+                    landmarks[16].y > landmarks[14].y;
+
+                // 2. Open palm
+                const isOpen = !isFist;
+
+                // 3. Pinch (Thumb tip close to Index tip)
+                const dx = landmarks[4].x - landmarks[8].x;
+                const dy = landmarks[4].y - landmarks[8].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const isPinch = dist < 0.05;
+
+                // Apply Logic
+                if (isPinch) {
+                    // Zoom/Manipulate mode
+                    // Map hand x/y to camera position or rotation
+                    const handX = landmarks[9].x - 0.5;
+                    const handY = landmarks[9].y - 0.5;
+                    points.rotation.x = handY * 2;
+                    points.rotation.z = -handX * 2;
+                } else if (isFist) {
+                    // Stop
+                    STATE.targetSpeed = 0;
+                    controls.autoRotate = false;
+                } else {
+                    // Flow (Open Hand)
+                    STATE.targetSpeed = 1.0;
+                    controls.autoRotate = true;
+                    controls.autoRotateSpeed = 2.0;
+                }
+
+            } else {
+                STATE.handPresent = false;
+                handStatus.innerText = "等待手势...";
+                handStatus.style.color = "#888";
+
+                // Reset to default idle
+                STATE.targetSpeed = 0.2;
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 0.5;
+                // Smoothly return rotation to 0
+                points.rotation.x *= 0.95;
+                points.rotation.z *= 0.95;
+            }
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 320,
+            height: 240
+        });
+
+        // Start camera if permitted (deferred to user action usually, but we try auto here for demo)
+        cameraUtils.start().catch(err => {
+            console.warn("Camera Init Failed or Denied:", err);
+            if (loader) loader.classList.add('hidden'); // Hide loader anyway so app is usable
+            handStatus.innerText = "摄像头无法访问 - 仅鼠标交互";
+            handStatus.style.color = "#FF6B6B";
+            document.getElementById('loader-text').innerText = "未检测到摄像头或权限被拒绝，已启用鼠标模式";
+        });
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            // Update Shader uniforms
+            material.uniforms.uTime.value = elapsedTime;
+
+            // Interpolate speed
+            STATE.speed += (STATE.targetSpeed - STATE.speed) * 0.05;
+
+            // Rotate galaxy container if needed (besides orbit controls)
+            // But OrbitControls handles camera. 
+            // We can rotate the points mesh for "Flow"
+            points.rotation.y += STATE.speed * 0.005;
+
+            // Animate Events
+            eventGroup.children.forEach(star => {
+                const scale = 1 + Math.sin(elapsedTime * 2.0) * 0.1;
+                star.scale.set(scale, scale, scale);
+                if (star.userData.ring) {
+                    star.userData.ring.rotation.z += 0.01;
+                    star.userData.ring.rotation.x += 0.01;
+                }
+            });
+
+            controls.update();
+            composer.render();
+        }
+
+        animate();
+
+        // --- UI & FEATURE EXTRACTION ---
+        const addBtn = document.getElementById('add-event-btn');
+        const modal = document.getElementById('add-modal');
+        const closeModal = document.getElementById('close-modal');
+        const form = document.getElementById('event-form');
+
+        addBtn.addEventListener('click', () => {
+            modal.classList.add('active');
+        });
+
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.remove('active');
+        });
+
+        // Feature Extraction: Average center area and boost brightness
+        function extractColor(imageElement) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 100; // Resize for performance
+            canvas.height = 100;
+
+            ctx.drawImage(imageElement, 0, 0, 100, 100);
+
+            try {
+                // Sample center 50x50 area
+                const imageData = ctx.getImageData(25, 25, 50, 50).data;
+                let r = 0, g = 0, b = 0, count = 0;
+
+                for (let i = 0; i < imageData.length; i += 4) {
+                    r += imageData[i];
+                    g += imageData[i + 1];
+                    b += imageData[i + 2];
+                    count++;
+                }
+
+                r = Math.floor(r / count);
+                g = Math.floor(g / count);
+                b = Math.floor(b / count);
+
+                // Convert to HSL to boost Lightness (Make it GLOW)
+                const rgbToHsl = (r, g, b) => {
+                    r /= 255; g /= 255; b /= 255;
+                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                    let h, s, l = (max + min) / 2;
+                    if (max === min) h = s = 0;
+                    else {
+                        const d = max - min;
+                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                        switch (max) {
+                            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                            case g: h = (b - r) / d + 2; break;
+                            case b: h = (r - g) / d + 4; break;
+                        }
+                        h /= 6;
+                    }
+                    return [h, s, l];
+                };
+
+                let [h, s, l] = rgbToHsl(r, g, b);
+
+                // FORCE Brightness & Saturation for Bloom effect
+                // If it's too dark (black/grey), it becomes invisible in space at night
+                if (l < 0.5) l = 0.6;
+                if (s < 0.3) s = 0.8; // Boost saturation
+
+                // Back to RGB (Simple CSS HSL string is easiest for Three.js Color constructor)
+                // H is 0-1, convert to degrees. S/L are 0-1, convert to %
+                return `hsl(${Math.floor(h * 360)}, ${Math.floor(s * 100)}%, ${Math.floor(l * 100)}%)`;
+
+            } catch (e) {
+                console.warn("Color extract failed, using fallback", e);
+                return '#FFD700'; // Bright Gold
+            }
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "提取特征中...";
+
+            const title = document.getElementById('event-title').value;
+            const date = document.getElementById('event-date').value;
+            const desc = document.getElementById('event-desc').value;
+            const fileInput = document.getElementById('event-file');
+
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                const isVideo = file.type.startsWith('video');
+                // Use ObjectURL for better performance (especially for videos)
+                const mediaSrc = URL.createObjectURL(file);
+
+                const data = {
+                    title, date, desc,
+                    mediaType: isVideo ? 'video' : 'image',
+                    src: mediaSrc
+                };
+
+                if (isVideo) {
+                    // For video, use a distinct Neon Cyan color to contrast
+                    addLifeEventToGalaxy(data, new THREE.Color('#00F0FF'));
+                    STATE.events.push(data);
+
+                    modal.classList.remove('active');
+                    btn.innerText = "注入银河";
+                    form.reset();
+                } else {
+                    // For image, we extract color
+                    const img = new Image();
+                    img.src = mediaSrc;
+                    img.onload = () => {
+                        const color = extractColor(img);
+
+                        addLifeEventToGalaxy(data, new THREE.Color(color));
+                        STATE.events.push(data);
+
+                        modal.classList.remove('active');
+                        btn.innerText = "注入银河";
+                        form.reset();
+                    };
+                }
+            }
+        });
+
+        function showEventCard(data) {
+            const card = document.getElementById('event-card');
+            const img = document.getElementById('card-img');
+            const vid = document.getElementById('card-video');
+
+            document.getElementById('card-title').innerText = data.title;
+            document.getElementById('card-date').innerText = data.date;
+            document.getElementById('card-desc').innerText = data.desc;
+
+            if (data.mediaType === 'image') {
+                img.src = data.src;
+                img.style.display = 'block';
+                vid.style.display = 'none';
+                vid.pause();
+                vid.src = ""; // Unload video
+            } else {
+                img.style.display = 'none';
+                vid.src = data.src;
+                vid.style.display = 'block';
+                // Explicitly call load and play
+                vid.load();
+                vid.play().catch(e => console.warn("Auto-play blocked:", e));
+            }
+
+            card.classList.add('active');
+        }
+
+        function hideEventCard() {
+            document.getElementById('event-card').classList.remove('active');
+            const vid = document.getElementById('card-video');
+            vid.pause();
+        }
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>
