@@ -363,6 +363,15 @@
                 <p>人生轨迹银河 · 你的专属时空</p>
             </div>
             <div class="controls">
+                <button class="btn" id="mute-btn" title="静音/取消静音">
+                    <svg id="sound-on-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z" />
+                    </svg>
+                    <svg id="sound-off-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H2v-6h3.586l5-5v16l-5-5zM23 9l-6 6M17 9l6 6" />
+                    </svg>
+                    <span id="chapter-name">童年</span>
+                </button>
                 <button class="btn" id="add-event-btn">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -454,8 +463,185 @@
             targetSpeed: 0.2,
             interactionMode: 'none', // none, rotate, zoom
             events: [],
-            handPresent: false
+            handPresent: false,
+            isMuted: false,
+            currentChapter: 0
         };
+
+        // --- CHAPTERS & AUDIO ---
+        const CHAPTERS = [
+            { name: '童年', minRadius: 0, maxRadius: 18, baseFreq: 220, color: '#FFD700' },
+            { name: '求学', minRadius: 18, maxRadius: 32, baseFreq: 330, color: '#87CEEB' },
+            { name: '工作', minRadius: 32, maxRadius: 44, baseFreq: 440, color: '#FF8C00' },
+            { name: '远行', minRadius: 44, maxRadius: 100, baseFreq: 550, color: '#9370DB' }
+        ];
+
+        class AudioManager {
+            constructor() {
+                this.audioContext = null;
+                this.channels = [];
+                this.masterGain = null;
+                this.initialized = false;
+                this.failed = false;
+                this.targetVolumes = [0, 0, 0, 0];
+                this.currentVolumes = [0, 0, 0, 0];
+                this.fadeSpeed = 0.02;
+            }
+
+            init() {
+                if (this.initialized || this.failed) return;
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContext) {
+                        this.failed = true;
+                        console.warn('Web Audio API not supported');
+                        return;
+                    }
+                    this.audioContext = new AudioContext();
+                    this.masterGain = this.audioContext.createGain();
+                    this.masterGain.gain.value = 0.3;
+                    this.masterGain.connect(this.audioContext.destination);
+
+                    CHAPTERS.forEach((chapter, i) => {
+                        const channel = this.createChapterSound(chapter, i);
+                        this.channels.push(channel);
+                    });
+
+                    this.initialized = true;
+
+                    const savedMute = localStorage.getItem('lifeGalaxy_muted');
+                    if (savedMute === 'true') {
+                        this.setMuted(true);
+                    }
+                } catch (e) {
+                    this.failed = true;
+                    console.warn('Audio initialization failed:', e);
+                }
+            }
+
+            createChapterSound(chapter, index) {
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 0;
+                gainNode.connect(this.masterGain);
+
+                const osc1 = this.audioContext.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.value = chapter.baseFreq;
+
+                const osc2 = this.audioContext.createOscillator();
+                osc2.type = 'triangle';
+                osc2.frequency.value = chapter.baseFreq * 1.5;
+
+                const osc3 = this.audioContext.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.value = chapter.baseFreq * 2;
+
+                const lfo = this.audioContext.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 0.1 + index * 0.05;
+
+                const lfoGain = this.audioContext.createGain();
+                lfoGain.gain.value = 5;
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc1.frequency);
+                lfoGain.connect(osc2.frequency);
+
+                const osc1Gain = this.audioContext.createGain();
+                osc1Gain.gain.value = 0.5;
+                const osc2Gain = this.audioContext.createGain();
+                osc2Gain.gain.value = 0.3;
+                const osc3Gain = this.audioContext.createGain();
+                osc3Gain.gain.value = 0.2;
+
+                osc1.connect(osc1Gain);
+                osc2.connect(osc2Gain);
+                osc3.connect(osc3Gain);
+
+                osc1Gain.connect(gainNode);
+                osc2Gain.connect(gainNode);
+                osc3Gain.connect(gainNode);
+
+                osc1.start();
+                osc2.start();
+                osc3.start();
+                lfo.start();
+
+                const noiseBuffer = this.createNoiseBuffer();
+                const noise = this.audioContext.createBufferSource();
+                noise.buffer = noiseBuffer;
+                noise.loop = true;
+
+                const noiseGain = this.audioContext.createGain();
+                noiseGain.gain.value = 0.02;
+
+                const noiseFilter = this.audioContext.createBiquadFilter();
+                noiseFilter.type = 'lowpass';
+                noiseFilter.frequency.value = 400 + index * 200;
+
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(gainNode);
+                noise.start();
+
+                return { gainNode, oscillators: [osc1, osc2, osc3], lfo, noise, noiseGain, noiseFilter };
+            }
+
+            createNoiseBuffer() {
+                const bufferSize = 2 * this.audioContext.sampleRate;
+                const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                return noiseBuffer;
+            }
+
+            setTargetVolumes(volumes) {
+                if (!this.initialized || this.failed) return;
+                this.targetVolumes = volumes;
+            }
+
+            update() {
+                if (!this.initialized || this.failed) return;
+                for (let i = 0; i < this.channels.length; i++) {
+                    const target = this.targetVolumes[i];
+                    const current = this.currentVolumes[i];
+                    const diff = target - current;
+                    if (Math.abs(diff) > 0.001) {
+                        this.currentVolumes[i] += diff * this.fadeSpeed;
+                        this.channels[i].gainNode.gain.value = this.currentVolumes[i];
+                    }
+                }
+            }
+
+            setMuted(muted) {
+                if (!this.initialized || this.failed) {
+                    STATE.isMuted = muted;
+                    localStorage.setItem('lifeGalaxy_muted', muted.toString());
+                    return;
+                }
+                STATE.isMuted = muted;
+                localStorage.setItem('lifeGalaxy_muted', muted.toString());
+                if (muted) {
+                    this.masterGain.gain.cancelScheduledValues(this.audioContext.currentTime);
+                    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, this.audioContext.currentTime);
+                    this.masterGain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.5);
+                } else {
+                    this.masterGain.gain.cancelScheduledValues(this.audioContext.currentTime);
+                    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, this.audioContext.currentTime);
+                    this.masterGain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.5);
+                }
+            }
+
+            resume() {
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().catch(() => { });
+                }
+            }
+        }
+
+        const audioManager = new AudioManager();
 
         // --- SCENE SETUP ---
         const container = document.getElementById('canvas-container');
@@ -780,23 +966,63 @@
         // --- ANIMATION LOOP ---
         const clock = new THREE.Clock();
 
+        function updateChapterAudio() {
+            const camDistance = camera.position.length();
+            const volumes = [0, 0, 0, 0];
+            const fadeZone = 8;
+
+            CHAPTERS.forEach((chapter, i) => {
+                if (camDistance >= chapter.minRadius - fadeZone && camDistance <= chapter.maxRadius + fadeZone) {
+                    let vol = 1;
+                    if (camDistance < chapter.minRadius + fadeZone) {
+                        vol = (camDistance - (chapter.minRadius - fadeZone)) / (fadeZone * 2);
+                    } else if (camDistance > chapter.maxRadius - fadeZone) {
+                        vol = ((chapter.maxRadius + fadeZone) - camDistance) / (fadeZone * 2);
+                    }
+                    vol = Math.max(0, Math.min(1, vol));
+                    volumes[i] = vol * 0.8;
+                }
+            });
+
+            const totalVol = volumes.reduce((a, b) => a + b, 0);
+            if (totalVol > 0) {
+                for (let i = 0; i < volumes.length; i++) {
+                    volumes[i] = volumes[i] / totalVol * 0.8;
+                }
+            }
+
+            if (audioManager.initialized && !audioManager.failed) {
+                audioManager.setTargetVolumes(volumes);
+            }
+
+            let maxVol = 0;
+            let maxIdx = 0;
+            for (let i = 0; i < volumes.length; i++) {
+                if (volumes[i] > maxVol) {
+                    maxVol = volumes[i];
+                    maxIdx = i;
+                }
+            }
+            if (maxIdx !== STATE.currentChapter && maxVol > 0.3) {
+                STATE.currentChapter = maxIdx;
+                const chapterNameEl = document.getElementById('chapter-name');
+                if (chapterNameEl) {
+                    chapterNameEl.innerText = CHAPTERS[maxIdx].name;
+                }
+            }
+        }
+
         function animate() {
             requestAnimationFrame(animate);
 
             const elapsedTime = clock.getElapsedTime();
 
-            // Update Shader uniforms
             material.uniforms.uTime.value = elapsedTime;
 
-            // Interpolate speed
             STATE.speed += (STATE.targetSpeed - STATE.speed) * 0.05;
 
-            // Rotate galaxy container if needed (besides orbit controls)
-            // But OrbitControls handles camera. 
-            // We can rotate the points mesh for "Flow"
             points.rotation.y += STATE.speed * 0.005;
 
-            // Animate Events
             eventGroup.children.forEach(star => {
                 const scale = 1 + Math.sin(elapsedTime * 2.0) * 0.1;
                 star.scale.set(scale, scale, scale);
@@ -806,6 +1032,9 @@
                 }
             });
 
+            updateChapterAudio();
+            audioManager.update();
+
             controls.update();
             composer.render();
         }
@@ -814,9 +1043,51 @@
 
         // --- UI & FEATURE EXTRACTION ---
         const addBtn = document.getElementById('add-event-btn');
+        const muteBtn = document.getElementById('mute-btn');
         const modal = document.getElementById('add-modal');
         const closeModal = document.getElementById('close-modal');
         const form = document.getElementById('event-form');
+
+        function updateMuteUI() {
+            const soundOn = document.getElementById('sound-on-icon');
+            const soundOff = document.getElementById('sound-off-icon');
+            if (STATE.isMuted) {
+                if (soundOn) soundOn.style.display = 'none';
+                if (soundOff) soundOff.style.display = 'block';
+            } else {
+                if (soundOn) soundOn.style.display = 'block';
+                if (soundOff) soundOff.style.display = 'none';
+            }
+        }
+
+        function initAudioOnUserGesture() {
+            if (!audioManager.initialized && !audioManager.failed) {
+                audioManager.init();
+                audioManager.resume();
+                if (STATE.isMuted) {
+                    audioManager.setMuted(true);
+                }
+            } else if (audioManager.initialized) {
+                audioManager.resume();
+            }
+        }
+
+        const savedMute = localStorage.getItem('lifeGalaxy_muted');
+        if (savedMute === 'true') {
+            STATE.isMuted = true;
+            updateMuteUI();
+        }
+
+        muteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            initAudioOnUserGesture();
+            STATE.isMuted = !STATE.isMuted;
+            audioManager.setMuted(STATE.isMuted);
+            updateMuteUI();
+        });
+
+        document.addEventListener('click', initAudioOnUserGesture, { once: true });
+        document.addEventListener('keydown', initAudioOnUserGesture, { once: true });
 
         addBtn.addEventListener('click', () => {
             modal.classList.add('active');
